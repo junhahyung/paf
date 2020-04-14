@@ -1,0 +1,26 @@
+{
+  "exp_name": "0409-test",
+
+  "landmark_path": "/home/banner/data-archive/landmark-tfr",
+
+  "finetune_regressor": true,
+  "pretrained_exp": "0409-test",
+
+  "train": false,
+  "finetune": true,
+
+  "img_size": 96,
+  "n_channel": 3,
+
+  "num_landmarks": 60,
+  "dot_size": 5,
+
+  "learning_rate": 0.00001,
+  "num_epochs": 200,
+  "batch_size": 32,
+  "dropout_rate": 0.5,
+  "max_num_threads": 24,
+
+  "training_steps": 50000,
+  "validation_steps": 85
+}
