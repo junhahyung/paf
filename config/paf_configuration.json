@@ -1,7 +1,7 @@
 {
   "exp_name": "0409-test",
 
-  "landmark_path": "/home/banner/data-archive/landmark-tfr",
+  "landmark_path": "/home/banner/data-archive/landmark-tfr/tight",
 
   "finetune_regressor": true,
   "pretrained_exp": "0409-test",

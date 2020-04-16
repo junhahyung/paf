@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 import tensorflow_addons as tfa
 import os
 
@@ -173,6 +174,63 @@ class TFDataset():
             boundary = tf.reshape(boundary, (11, 240, 240))
             boundary = tf.transpose(boundary, [1, 2, 0])
             return boundary
+        
+        def create_paf(lms):
+            def points_in_circle_tf(radius):
+                a = tf.range(radius+1)
+                x = tf.where(tf.expand_dims(a,1)**2 + a**2 <= radius**2)
+                x = tf.cast(x, tf.int32)
+                x1 = tf.multiply(x, tf.constant([1, -1]))
+                x2 = tf.multiply(x, tf.constant([-1, -1]))
+                x3 = tf.multiply(x, tf.constant([-1, 1]))
+                x = tf.concat([x,x1,x2,x3],axis=0)
+                return x
+            
+            imsize = self.config.img_size
+            paf = tf.zeros((2,imsize,imsize))
+            bound = points_in_circle_tf(1)
+            # disconnect these points in landmark
+            pl = [16,26,35,41,47,59]
+            total_points = tf.reshape(tf.constant([], tf.int32), (0,2))
+            
+            for i in tf.range(len(lms)-1):
+                '''
+                if int(i) in pl:
+                    continue
+                '''
+                
+                px, py = lms[i+1] - lms[i]
+                length = tf.sqrt(px**2+py**2)
+                unit_px, unit_py = px/length, py/length
+                x, y = lms[i]
+                x_n, y_n = lms[i+1]
+                xlist = tf.linspace(x, x_n, int(length)+1)
+                xlist = tf.cast(xlist, tf.int32)
+                xlist = tf.expand_dims(xlist, axis=0)
+                ylist = tf.linspace(y, y_n, int(length)+1)
+                ylist = tf.cast(ylist, tf.int32)
+                ylist = tf.expand_dims(ylist, axis=0)
+                points = tf.concat((xlist, ylist))
+                points = tf.transpose(points)
+                points = tf.constant([points[i]+bound for i in range(points.shape[0])])
+                points = tf.reshape(points, (-1,2))
+                points = tf.constant(np.unique(points, axis=0))
+                
+                dr = []
+                for i, row in enumerate(points):
+                    xp, yp = row
+                    xp, yp = int(xp), int(yp)
+                    if xp >= imsize or xp < 0 or yp >= imsize or yp < 0:
+                        dr.append(i)
+                        continue
+                    paf[0][xp][yp] = unit_px
+                    paf[1][xp][yp] = unit_py
+                
+                points = np.delete(points, dr, 0)
+                total_points = tf.concat([total_points, points], axis=0)
+                                      
+            #total_points = tf.constant(np.unique(total_points, axis=0), tf.int32)
+            return paf, total_points
 
         record = self._parse_features(record)
 
@@ -230,4 +288,7 @@ class TFDataset():
                                                 192, 192)
         heatmap = tf.image.resize(heatmap, (self.config.img_size, self.config.img_size))
 
-        return img, (heatmap, landmark)
+        # paf
+        paf, total_points = create_paf(landmark)
+        
+        return img, (heatmap, landmark, paf, total_points)

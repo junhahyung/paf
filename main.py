@@ -31,9 +31,8 @@ def main():
 
     dataset = iter(train_data_generator())
     x,y = next(dataset)
-    print(x.shape)
-    print(y[0].shape)
-    print(y[1].shape)
+    print(y[2])
+    print(y[3])
 
 
 
