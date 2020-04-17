@@ -25,6 +25,11 @@ def points_in_circle_tf(radius):
     #yield from set(((x, y), (x, -y), (-x, y), (-x, -y),))
     return x
 
-a = tf.constant([[1,2],[2,3.]])
-b = tf.constant([[2,3],[3,4.]])
-c = tf.linspace(a,b,3)
+x = tf.linspace(10.,-10,10)[:,None]
+y = tf.linspace(10.,-10,10)[None,:]
+t = tf.sqrt(x**2 + y**2)
+t = tf.reduce_max(t) - t
+t = t / tf.reduce_max(t)
+t = [t] * 2 
+#kernel= tf.reshape([t]*10,)
+print(t)
