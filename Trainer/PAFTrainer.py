@@ -64,7 +64,7 @@ class Trainer():
                 self.imgs_from_train = x
 
             # train generator
-            loss, grads, paf = self.train_step(self.paf_gen, x, y[2], self.paf_gen_loss)
+            loss, grads, paf = self.train_step(self.paf_gen, x, y[1], self.paf_gen_loss)
             self.paf_opt.apply_gradients(zip(grads, self.paf_gen.trainable_variables))
 
             losses.append(loss)
@@ -78,7 +78,7 @@ class Trainer():
             if (i == 0) & (epoch == 0):
                 self.imgs_from_val = x
 
-            loss, paf_ = self.get_loss(self.paf_gen, x, y[2], self.paf_gen_loss)
+            loss, paf_ = self.get_loss(self.paf_gen, x, y[1], self.paf_gen_loss)
 
             val_losses.append(loss)
         val_loss = sum(val_losses) / len(val_losses)

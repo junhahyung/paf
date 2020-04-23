@@ -21,7 +21,7 @@
   "dropout_rate": 0.5,
   "max_num_threads": 24,
 
-  "training_steps": 10000,
+  "training_steps": 50000,
   "validation_steps": 85,
 
   "checkpoint_dir": "/home/hobbs/bench-liam/paf/checkpoints",

@@ -59,7 +59,6 @@ class TFDataset():
             .interleave(tf.data.TFRecordDataset, num_parallel_calls=tf.data.experimental.AUTOTUNE) \
             .map(self.preprocess, num_parallel_calls=tf.data.experimental.AUTOTUNE) \
             .apply(tf.data.experimental.ignore_errors()) \
-            .shuffle(frame_shuffle_buffer) \
             .batch(self.config.batch_size, drop_remainder=True) \
             .prefetch(tf.data.experimental.AUTOTUNE)
         return tfrecord_data
@@ -286,12 +285,16 @@ class TFDataset():
                 paf = tf.concat([paf_boundary, paf_connect], -2) # (240,240,28,2)
                 paf = tf.math.reduce_sum(paf, axis=-2) # (240, 240, 2)
                 
+                # too slow?
+                '''
                 w, h, c = paf.shape
                 input_tensor = tf.reshape(paf, (1,w,h,c))
                 input_tensor = tf.cast(input_tensor, tf.float32)
                 paf = tf.nn.depthwise_conv2d(input_tensor, kernel, strides=[1,1,1,1], padding='SAME')
                 paf = tf.squeeze(paf)
+                '''
                 paf = tf.math.divide_no_nan(paf, tf.expand_dims(tf.linalg.norm(paf, axis=-1), -1))
+                paf = tf.cast(paf, tf.float32)
 
                 return paf
 
@@ -370,9 +373,6 @@ class TFDataset():
         landmarks = tf.reshape(landmarks, (-1, 2))
         landmarks = get_n_landmarks(landmarks)
 
-        # boundary heatmap
-        boundary = parse_boundary_heatmap(record)
-
         # random noises
 
         theta = tf.random.uniform([], -3.14159265, 3.14159265)
@@ -391,7 +391,6 @@ class TFDataset():
             rotated_landmark = tf.matmul(landmarks, R)
             landmarks = rotated_landmark + tf.cast([0.5, 0.5], tf.float32)
             img = tfa.image.rotate(img, theta, 'BILINEAR')
-            boundary = tfa.image.rotate(boundary, theta, 'BILINEAR')
 
         resized_landmark = landmarks * tf.cast(tf.reshape([size_x, size_y], [2]), tf.float32)
         offseted_landmark = resized_landmark - tf.reshape([offset_x, offset_y], [2])
@@ -406,15 +405,7 @@ class TFDataset():
                                             192, 192)
         img = tf.image.resize(img, (self.config.img_size, self.config.img_size))
 
-        # heatmap
-        resized_bm = tf.image.resize(boundary, size2d)
-        heatmap = tf.image.crop_to_bounding_box(resized_bm,
-                                                tf.cast(offset_y, tf.int32),
-                                                tf.cast(offset_x, tf.int32),
-                                                192, 192)
-        heatmap = tf.image.resize(heatmap, (self.config.img_size, self.config.img_size))
-
         img = tf.image.per_image_standardization(img)
         paf = get_paf(landmark, img)
 
-        return img, (heatmap, landmark, paf)
+        return img, (landmark, paf)

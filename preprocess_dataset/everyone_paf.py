@@ -134,8 +134,8 @@ def get_boundary_map(pts2d, img):
 
     return heatmap
 
-def get_paf(lms, img):
-    landmarks = lms
+def get_paf(img, landmarks):
+    kernel = create_gaussian_kernel(3,2)
 
     jaw = landmarks[0:17]
     right_eyebrow = landmarks[17:22]
@@ -143,11 +143,11 @@ def get_paf(lms, img):
     nose_vert = landmarks[27:31]
     nose_hori = landmarks[31:36]
     re_upper = landmarks[36:40]
-    re_lower = landmarks[39:42] + landmarks[36:37]
+    re_lower = tf.concat((landmarks[39:42], landmarks[36:37]), axis=0)
     le_upper = landmarks[42:46]
-    le_lower = landmarks[45:48] + landmarks[42:43]
-    mouth_upper = landmarks[48:54] + landmarks[54:55]
-    mouth_lower = landmarks[54:60] + landmarks[48:49]
+    le_lower = tf.concat((landmarks[45:48], landmarks[42:43]), axis=0)
+    mouth_upper = tf.concat((landmarks[48:54], landmarks[54:55]), axis=0)
+    mouth_lower = tf.concat((landmarks[54:60], landmarks[48:49]), axis=0)
 
     boundaries = [jaw,
                   right_eyebrow, left_eyebrow,
@@ -155,25 +155,63 @@ def get_paf(lms, img):
                   re_upper, re_lower,
                   le_upper, le_lower,
                   mouth_upper, mouth_lower]
-    
-    eyebrow_jaw_r = landmarks[0:1] + landmarks[17:18]
-    eyebrow_jaw_l = landmarks[16:17] + landmarks[26:27]
-    nose_eye_r = landmarks[27:28] + landmarks[39:40]
-    nose_eye_l = landmarks[27:28] + landmarks[42:43]
-    jaw_mouth_r = landmarks[0:1] + landmarks[48:49]
-    jaw_mouth_l = landmarks[16:17] + landmarks[54:55]
-    horinose_eye_r = landmarks[31:32] + landmarks[39:40]
-    horinose_eye_l = landmarks[35:36] + landmarks[42:43]
-    eye_jaw_r = landmarks[0:1] + landmarks[36:37]
-    eye_jaw_l = landmarks[16:17] + landmarks[45:46]
+    h,w,c, = img.shape
+    paf_x = []
+    paf_y = []
+
+    for landmark in boundaries:
+        llandmark = landmark[1:]
+        rlandmark = landmark[:-1]
+        
+        pvec = llandmark - rlandmark
+        pvec = tf.pad(pvec, [(0,1),(0,0)], mode='SYMMETRIC')
+        px, py = tf.transpose(pvec)
+        x, y = tf.transpose(landmark)
+        
+        i = tf.range(0, len(pvec))
+        interp_i = tf.linspace(0., len(pvec)-1, 30 * tf.size(i))
+        
+        vectormap_x = np.zeros((h,w))
+        vectormap_y = np.zeros((h,w))
+        
+        px = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), px)
+        py = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), py)
+        
+        xi = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), x)
+        yi = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), y)
+        
+        xi = tf.cast(tf.clip_by_value(xi, 0, w-1), tf.int32)
+        yi = tf.cast(tf.clip_by_value(yi, 0, h-1), tf.int32)
+        
+        pvec = tf.stack([px, py], 1)
+        unitvec = pvec / tf.linalg.norm(pvec, axis=1)[:, None]
+        px, py = tf.transpose(unitvec)
+        
+        vectormap_x[xi, yi] = px
+        vectormap_y[xi, yi] = py
+        paf_x.append(vectormap_x)
+        paf_y.append(vectormap_y)
+    paf_boundary = tf.stack([paf_x, paf_y]) # (2, 11, 240, 240)
+
+    # connections
+    eyebrow_jaw_r = tf.concat((landmarks[0:1], landmarks[17:18]), axis=0)
+    eyebrow_jaw_l = tf.concat((landmarks[16:17], landmarks[26:27]), axis=0)
+    nose_eye_r = tf.concat((landmarks[27:28], landmarks[39:40]), axis=0)
+    nose_eye_l = tf.concat((landmarks[27:28], landmarks[42:43]), axis=0)
+    jaw_mouth_r = tf.concat((landmarks[0:1], landmarks[48:49]), axis=0)
+    jaw_mouth_l = tf.concat((landmarks[16:17], landmarks[54:55]), axis=0)
+    horinose_eye_r = tf.concat((landmarks[31:32], landmarks[39:40]), axis=0)
+    horinose_eye_l = tf.concat((landmarks[35:36], landmarks[42:43]), axis=0)
+    eye_jaw_r = tf.concat((landmarks[0:1], landmarks[36:37]), axis=0)
+    eye_jaw_l = tf.concat((landmarks[16:17], landmarks[45:46]), axis=0)
+    nose_connect_r = tf.concat((landmarks[30:31], landmarks[31:32]), axis=0)
+    nose_connect_l = tf.concat((landmarks[30:31], landmarks[35:36]), axis=0)
+    eye_eyebrow_r = tf.concat((landmarks[21:22], landmarks[39:40]), axis=0)
+    eye_eyebrow_l = tf.concat((landmarks[22:23], landmarks[42:43]), axis=0)
+    nose_mouth_r = tf.concat((landmarks[31:32], landmarks[48:49]), axis=0)
+    nose_mouth_l = tf.concat((landmarks[35:36], landmarks[54:55]), axis=0)
     eyebrow_connect = landmarks[21:23]
-    nose_connect_r = landmarks[30:31] + landmarks[31:32]
-    nose_connect_l = landmarks[30:31] + landmarks[35:36]
-    eye_eyebrow_r = landmarks[21:22] + landmarks[39:40]
-    eye_eyebrow_l = landmarks[22:23] + landmarks[42:43]
-    nose_mouth_r = landmarks[31:32] + landmarks[48:49]
-    nose_mouth_l = landmarks[35:36] + landmarks[54:55]
-    
+
     # connecting two boundaries
     connects = [eyebrow_jaw_l, eyebrow_jaw_r, 
                 nose_eye_r, nose_eye_l,
@@ -183,48 +221,7 @@ def get_paf(lms, img):
                nose_connect_r, nose_connect_l, eyebrow_connect,
                eye_eyebrow_r, eye_eyebrow_l,
                nose_mouth_r, nose_mouth_l]
-    
-    boundaries = [np.array(p) for p in boundaries]
-    connects = [np.array(p) for p in connects]
     h,w,c, = img.shape
-    paf_x = []
-    paf_y = []
-    
-    for landmark in boundaries:
-        llandmark = landmark[1:]
-        rlandmark = landmark[:-1]
-        
-        pvec = llandmark - rlandmark
-        pvec = np.pad(pvec, [(0,1),(0,0)], mode='edge')
-        px, py = np.transpose(pvec)
-        x, y = np.transpose(landmark)
-        
-        i = np.arange(0, len(pvec))
-        interp_i = np.linspace(0, i.max(), 30 * i.size)
-        
-        vectormap_x = np.zeros((h,w))
-        vectormap_y = np.zeros((h,w))
-
-        px = interp1d(i, px)(interp_i)
-        py = interp1d(i, py)(interp_i)
-        
-        xi = np.array(interp1d(i, x)(interp_i), int)
-        yi = np.array(interp1d(i, y)(interp_i), int)
-        
-        xi = np.clip(xi, None, w-1)
-        yi = np.clip(yi, None, h-1)
-        
-        pvec = np.reshape(np.stack([px, py], 1), (-1, 2))
-        unitvec = pvec / np.linalg.norm(pvec, axis=1)[:, None]
-        px, py = np.transpose(unitvec)
-        
-        vectormap_x[xi, yi] = px
-        vectormap_y[xi, yi] = py
-        paf_x.append(vectormap_x)
-        paf_y.append(vectormap_y)
-        
-    paf = np.array([paf_x, paf_y])
-    
     paf_x = []
     paf_y = []
     for landmark in connects:
@@ -232,48 +229,49 @@ def get_paf(lms, img):
         rlandmark = landmark[:-1]
         
         pvec = llandmark - rlandmark
-        px, py = np.transpose(pvec)
-        x, y = np.transpose(landmark)
+        px, py = tf.transpose(pvec)
+        x, y = tf.transpose(landmark)
         
-        i = np.arange(0, len(pvec)+1)
-        interp_i = np.linspace(0, i.max(), 30 * i.size)
+        i = tf.range(0, len(pvec)+1)
+        interp_i = tf.linspace(0., len(pvec), 30 * (tf.size(i)-1))
         
         vectormap_x = np.zeros((h,w))
         vectormap_y = np.zeros((h,w))
 
-        px = interp1d(i+1, np.concatenate((px, px)), fill_value="extrapolate")(interp_i)
-        py = interp1d(i+1, np.concatenate((py, py)), fill_value="extrapolate")(interp_i)
+        px = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), px)
+        py = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), py)
         
-        xi = np.array(interp1d(i, x)(interp_i), int)
-        yi = np.array(interp1d(i, y)(interp_i), int)
+        xi = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), x)
+        yi = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), y)
         
-        xi = np.clip(xi, None, w-1)
-        yi = np.clip(yi, None, h-1)
+        xi = tf.cast(tf.clip_by_value(xi, 0, w-1), tf.int32)
+        yi = tf.cast(tf.clip_by_value(yi, 0, w-1), tf.int32)
 
-        pvec = np.reshape(np.stack([px, py], 1), (-1, 2))
-        unitvec = pvec / np.linalg.norm(pvec, axis=1)[:, None]
-        px, py = np.transpose(unitvec)
+        pvec = tf.stack([px, py],1)
+        unitvec = pvec / tf.linalg.norm(pvec, axis=1)[:, None]
+        px, py = tf.transpose(unitvec)
         
         vectormap_x[xi, yi] = px
         vectormap_y[xi, yi] = py
         paf_x.append(vectormap_x)
         paf_y.append(vectormap_y)
     
-    paf_connect = np.array([paf_x, paf_y])
-    paf_total = np.concatenate((paf,paf_connect),1) #(2,28,240,240)
-    total_x = paf_total[0]
-    total_y = paf_total[1]
-    total_x = np.transpose(total_x, (1,2,0))
-    total_y = np.transpose(total_y, (1,2,0)) #(240,240,28)
-    total_x = tf.math.reduce_sum(total_x, axis=-1)
-    total_y = tf.math.reduce_sum(total_y, axis=-1) #(240,240)
+    paf_connect = tf.stack([paf_x, paf_y])
+
+    paf_boundary = tf.transpose(paf_boundary, [2,3,1,0])
+    paf_connect = tf.transpose(paf_connect, [2,3,1,0])
+    paf = tf.concat([paf_boundary, paf_connect], -2) # (240,240,28,2)
+    paf = tf.math.reduce_sum(paf, axis=-2) # (240, 240, 2)
     
-    w, h = total_x.shape
-    total_x = tf.reshape(total_x, (w, h, 1))
-    total_y = tf.reshape(total_y, (w, h, 1))
+    w, h, c = paf.shape
+    input_tensor = tf.reshape(paf, (1,w,h,c))
+    input_tensor = tf.cast(input_tensor, tf.float32)
+    paf = tf.nn.depthwise_conv2d(input_tensor, kernel, strides=[1,1,1,1], padding='SAME')
+    paf = tf.squeeze(paf)
+    paf = tf.math.divide_no_nan(paf, tf.expand_dims(tf.linalg.norm(paf, axis=-1), -1))
+    paf = tf.cast(paf, tf.float32)
 
-    return total_x, total_y
-
+    return paf
 
 def create_gaussian_kernel(dot_size, num_channels):
     # make a canvas
@@ -290,7 +288,6 @@ def create_gaussian_kernel(dot_size, num_channels):
     kernel = tf.reshape([template] * num_channels, (num_channels, dot_size, dot_size, 1))
     kernel = tf.transpose(kernel, [1, 2, 0, 3])
     return kernel
-
 
 def get_features(fid):
     dt = get_everyone_data(fid)
@@ -313,42 +310,9 @@ def get_features(fid):
     face = cv2.resize(face, (240, 240))
     face_landmarks = normed_landmarks * 240
 
-    boundary_map = get_boundary_map(face_landmarks.tolist(), face)
+    gaussian_filtered_paf  = get_paf(face_landmarks, face)
 
-    w, h, c = boundary_map.shape
-    input_tensor = np.reshape(boundary_map, (1, w, h, c))
-    input_tensor = tf.cast(input_tensor, np.float32)
-    gaussian_filtered_map = tf.nn.depthwise_conv2d(input_tensor, kernel_heat, strides=[1, 1, 1, 1], padding='SAME')[0]
-
-    total_x, total_y = get_paf(face_landmarks.tolist(), face)
-    #total_x, total_y : (240,240, 1)
-
-    w, h, c = total_x.shape
-    input_tensor = np.reshape(total_x, (1, w, h, c))
-    input_tensor = tf.cast(input_tensor, np.float32)
-    total_x = tf.nn.depthwise_conv2d(input_tensor, kernel_paf, strides=[1, 1, 1, 1], padding='SAME')[0]
-    
-    input_tensor = np.reshape(total_y, (1, w, h, c))
-    input_tensor = tf.cast(input_tensor, np.float32)
-    total_y = tf.nn.depthwise_conv2d(input_tensor, kernel_paf, strides=[1, 1, 1, 1], padding='SAME')[0]
-    
-    gaussian_filtered_paf = tf.stack([total_x, total_y])
-
-    # Headpose Estimation
-    # f = img_w
-    # c = (img_w / 2, img_h / 2)
-    #
-    # required_landmarks = get_required_landmarks(landmarks)
-    # image_points_2d = get2DImagePoints(required_landmarks)
-    # rvec, tvec = getRVec(image_points_2d, f, c)
-    #
-    # rmat = cv2.Rodrigues(rvec)[0]
-    #
-    # if tvec[-1] < 0:
-    #     rmat[:,1:] = rmat[:,1:] * -1 # note: for some reason, solvePnP fails to find solution on positive z-axis.
-    # hp = rotationMatrixToEulerAngles(rmat)
-
-    return face, normed_landmarks, gaussian_filtered_map, gaussian_filtered_paf
+    return face, normed_landmarks, gaussian_filtered_paf
 
 def create_a_heatmap(landmark, img_size=96):
     landmark = landmark * [img_size, img_size]
@@ -363,11 +327,11 @@ def create_a_heatmap(landmark, img_size=96):
     hm = cv2.rotate(hm, cv2.ROTATE_90_CLOCKWISE)
     return hm
 
-def encode_boundary_map(boundary_map):
-    w, h, c = boundary_map.shape
-    encoded_boundaries = []
+def encode_paf(paf):
+    w, h, c = paf.shape
+    encoded_paf = []
     for i in range(c):
-        temp = boundary_map[:, :, i]
+        temp = paf[:,:,i]
         temp2 = cv2.normalize(temp.numpy(), None, 0, 255, cv2.NORM_MINMAX)
         temp3 = tf.cast(temp2, tf.uint8)
         temp4 = tf.reshape(temp3, (240, 240, 1))
@@ -375,28 +339,18 @@ def encode_boundary_map(boundary_map):
         encoded_boundaries.append(encoded)
     return encoded_boundaries
 
+
 def encode_features(feature):
-    face, normed_landmarks, boundary_map, paf = feature
+    face, normed_landmarks, paf = feature
 
     encoded_face = tf.io.encode_jpeg(face, quality=100).numpy()
-    encoded_boundaries = encode_boundary_map(boundary_map)
+    paf = encode_paf(paf)
 
     feature = {
         'image': _bytes_feature(encoded_face),
         'landmarks': _float_feature(np.reshape(normed_landmarks, (-1)).tolist()),
         'headpose': _float_feature(np.reshape([0, 0, 0], (-1)).tolist()),
-        'paf': _float_feature(np.reshape(paf, (-1)).tolist()),
-        'jaw': _bytes_feature(encoded_boundaries[0]),
-        'right_eyebrow': _bytes_feature(encoded_boundaries[1]),
-        'left_eyebrow': _bytes_feature(encoded_boundaries[2]),
-        'nose_vert': _bytes_feature(encoded_boundaries[3]),
-        'nose_hori': _bytes_feature(encoded_boundaries[4]),
-        're_upper': _bytes_feature(encoded_boundaries[5]),
-        're_lower': _bytes_feature(encoded_boundaries[6]),
-        'le_upper': _bytes_feature(encoded_boundaries[7]),
-        'le_lower': _bytes_feature(encoded_boundaries[8]),
-        'mouth_upper': _bytes_feature(encoded_boundaries[9]),
-        'mouth_lower': _bytes_feature(encoded_boundaries[10])
+        'paf': _bytes_feature(paf)
     }
 
     return feature
@@ -413,12 +367,11 @@ def convert_to_tfrecord(json_path, writer):
     return 1
 
 
-data_path = "/home/banner/data-archive/everyone/train"
+data_path = ""
 all_json_paths = os.listdir(os.path.join(data_path, 'data'))
 
 temp = [x.split('_')[0] for x in all_json_paths]
 all_uids = np.unique(temp)
-# counts_per_uid = np.stack(counts_per_uid, axis=-1)
 
 np.random.seed(2000)
 val_uids = random.choices(all_uids.tolist(), k=20)
@@ -432,22 +385,27 @@ print(len(train_json_paths), len(val_json_paths))
 
 max_thread_num = multiprocessing.cpu_count()
 
-kernel_heat = create_gaussian_kernel(5, 11)
-kernel_paf = create_gaussian_kernel(3, 1)
+kernel_paf = create_gaussian_kernel(3, 2)
 
-write_path = '/mnt/sata3/paf/everyone-paf-train.tfrecords'
+write_path = '/mnt/SSD1/paf/everyone-paf-train.tfrecords'
 counter = 0
 with tf.io.TFRecordWriter(write_path) as writer:
     # with concurrent.futures.ThreadPoolExecutor(max_workers=max_thread_num) as executor:
     for json_path in tqdm(train_json_paths):
+        cnt += 1
         # print(f"Train counter: {i}/{len(train_json_paths)}")
         convert_to_tfrecord(json_path=json_path, writer=writer)
+        if cnt == 100:
+            break
 
-write_path = '/mnt/sata3/paf/everyone-paf-val.tfrecords'
+write_path = '/mnt/SSD1/paf/everyone-paf-val.tfrecords'
 counter = 0
 with tf.io.TFRecordWriter(write_path) as writer:
     # with concurrent.futures.ThreadPoolExecutor(max_workers=max_thread_num) as executor:
     for json_path in tqdm(val_json_paths):
+        cnt += 1
         # print(f"Val counter: {i}/{len(val_json_paths)}")
         convert_to_tfrecord(json_path=json_path, writer=writer)
         # executor.submit(convert_to_tfrecord, json_path=json_path, writer=writer)
+        if cnt == 100:
+            break
