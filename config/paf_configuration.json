@@ -9,7 +9,7 @@
   "train": false,
   "finetune": true,
 
-  "img_size": 96,
+  "img_size": 240,
   "n_channel": 3,
 
   "num_landmarks": 60,
@@ -22,5 +22,7 @@
   "max_num_threads": 24,
 
   "training_steps": 50000,
-  "validation_steps": 85
+  "validation_steps": 85,
+
+  "checkpoint_dir": "/home/banner/bench-liam/paf/checkpoints"
 }
