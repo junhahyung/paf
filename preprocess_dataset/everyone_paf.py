@@ -8,6 +8,7 @@ from scipy.interpolate import interp1d
 import concurrent.futures
 import multiprocessing
 
+import tensorflow_probability as tfp
 from utils.image_preprocessor import *
 from TFRHelper import *
 
@@ -135,8 +136,10 @@ def get_boundary_map(pts2d, img):
     return heatmap
 
 def get_paf(img, landmarks):
+    landmarks = tf.cast(landmarks, tf.float32)
     kernel = create_gaussian_kernel(3,2)
 
+    '''
     jaw = landmarks[0:17]
     right_eyebrow = landmarks[17:22]
     left_eyebrow = landmarks[22:27]
@@ -162,36 +165,37 @@ def get_paf(img, landmarks):
     for landmark in boundaries:
         llandmark = landmark[1:]
         rlandmark = landmark[:-1]
-        
+
         pvec = llandmark - rlandmark
         pvec = tf.pad(pvec, [(0,1),(0,0)], mode='SYMMETRIC')
         px, py = tf.transpose(pvec)
         x, y = tf.transpose(landmark)
-        
+
         i = tf.range(0, len(pvec))
         interp_i = tf.linspace(0., len(pvec)-1, 30 * tf.size(i))
-        
+
         vectormap_x = np.zeros((h,w))
         vectormap_y = np.zeros((h,w))
-        
+
         px = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), px)
         py = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), py)
-        
+
         xi = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), x)
         yi = tfp.math.interp_regular_1d_grid(interp_i, 0, len(pvec), y)
-        
+
         xi = tf.cast(tf.clip_by_value(xi, 0, w-1), tf.int32)
         yi = tf.cast(tf.clip_by_value(yi, 0, h-1), tf.int32)
-        
+
         pvec = tf.stack([px, py], 1)
         unitvec = pvec / tf.linalg.norm(pvec, axis=1)[:, None]
         px, py = tf.transpose(unitvec)
-        
+
         vectormap_x[xi, yi] = px
         vectormap_y[xi, yi] = py
         paf_x.append(vectormap_x)
         paf_y.append(vectormap_y)
-    paf_boundary = tf.stack([paf_x, paf_y]) # (2, 11, 240, 240)
+        paf_boundary = tf.stack([paf_x, paf_y]) # (2, 11, 240, 240)
+    '''
 
     # connections
     eyebrow_jaw_r = tf.concat((landmarks[0:1], landmarks[17:18]), axis=0)
@@ -258,9 +262,10 @@ def get_paf(img, landmarks):
     
     paf_connect = tf.stack([paf_x, paf_y])
 
-    paf_boundary = tf.transpose(paf_boundary, [2,3,1,0])
+    #paf_boundary = tf.transpose(paf_boundary, [2,3,1,0])
     paf_connect = tf.transpose(paf_connect, [2,3,1,0])
-    paf = tf.concat([paf_boundary, paf_connect], -2) # (240,240,28,2)
+    #paf = tf.concat([paf_boundary, paf_connect], -2) # (240,240,28,2)
+    paf = paf_connect
     paf = tf.math.reduce_sum(paf, axis=-2) # (240, 240, 2)
     
     w, h, c = paf.shape
@@ -296,6 +301,10 @@ def get_features(fid):
         return None
 
     img, landmarks, data = dt
+    print("data")
+    print(data)
+    print(data.keys())
+    print(data['vcft'].keys())
 
     if not 'vcft' in data.keys():
         return None
@@ -310,7 +319,7 @@ def get_features(fid):
     face = cv2.resize(face, (240, 240))
     face_landmarks = normed_landmarks * 240
 
-    gaussian_filtered_paf  = get_paf(face_landmarks, face)
+    gaussian_filtered_paf  = get_paf(face, face_landmarks)
 
     return face, normed_landmarks, gaussian_filtered_paf
 
@@ -336,8 +345,8 @@ def encode_paf(paf):
         temp3 = tf.cast(temp2, tf.uint8)
         temp4 = tf.reshape(temp3, (240, 240, 1))
         encoded = tf.io.encode_jpeg(temp4, quality=100).numpy()
-        encoded_boundaries.append(encoded)
-    return encoded_boundaries
+        encoded_paf.append(encoded)
+    return encoded_paf
 
 
 def encode_features(feature):
@@ -350,7 +359,8 @@ def encode_features(feature):
         'image': _bytes_feature(encoded_face),
         'landmarks': _float_feature(np.reshape(normed_landmarks, (-1)).tolist()),
         'headpose': _float_feature(np.reshape([0, 0, 0], (-1)).tolist()),
-        'paf': _bytes_feature(paf)
+        'paf_x': _bytes_feature(paf[0]),
+        'paf_y': _bytes_feature(paf[1])
     }
 
     return feature
@@ -367,7 +377,7 @@ def convert_to_tfrecord(json_path, writer):
     return 1
 
 
-data_path = ""
+data_path = "/mnt/SSD2/paf/everyone/train"
 all_json_paths = os.listdir(os.path.join(data_path, 'data'))
 
 temp = [x.split('_')[0] for x in all_json_paths]
@@ -384,28 +394,20 @@ val_json_paths = [x for x in all_json_paths if x.split('_')[0] in val_uids]
 print(len(train_json_paths), len(val_json_paths))
 
 max_thread_num = multiprocessing.cpu_count()
+print("cpu", max_thread_num)
 
 kernel_paf = create_gaussian_kernel(3, 2)
 
-write_path = '/mnt/SSD1/paf/everyone-paf-train.tfrecords'
-counter = 0
+write_path = '/mnt/SSD2/paf/everyone-paf-train-test.tfrecords'
+cnt = 0
 with tf.io.TFRecordWriter(write_path) as writer:
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=max_thread_num) as executor:
     for json_path in tqdm(train_json_paths):
-        cnt += 1
-        # print(f"Train counter: {i}/{len(train_json_paths)}")
         convert_to_tfrecord(json_path=json_path, writer=writer)
-        if cnt == 100:
-            break
+        break
 
-write_path = '/mnt/SSD1/paf/everyone-paf-val.tfrecords'
-counter = 0
+write_path = '/mnt/SSD2/paf/everyone-paf-val-test.tfrecords'
+cnt = 0
 with tf.io.TFRecordWriter(write_path) as writer:
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=max_thread_num) as executor:
     for json_path in tqdm(val_json_paths):
-        cnt += 1
-        # print(f"Val counter: {i}/{len(val_json_paths)}")
         convert_to_tfrecord(json_path=json_path, writer=writer)
-        # executor.submit(convert_to_tfrecord, json_path=json_path, writer=writer)
-        if cnt == 100:
-            break
+        break
