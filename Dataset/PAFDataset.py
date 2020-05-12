@@ -21,17 +21,8 @@ class TFDataset():
             'image': tf.io.VarLenFeature(tf.string),
             'landmarks': tf.io.FixedLenFeature([68*2], tf.float32),
             'headpose': tf.io.FixedLenFeature([3], tf.float32),
-            'jaw': tf.io.VarLenFeature(tf.string),
-            'right_eyebrow': tf.io.VarLenFeature(tf.string),
-            'left_eyebrow': tf.io.VarLenFeature(tf.string),
-            'nose_vert': tf.io.VarLenFeature(tf.string),
-            'nose_hori': tf.io.VarLenFeature(tf.string),
-            're_upper': tf.io.VarLenFeature(tf.string),
-            're_lower': tf.io.VarLenFeature(tf.string),
-            'le_upper': tf.io.VarLenFeature(tf.string),
-            'le_lower': tf.io.VarLenFeature(tf.string),
-            'mouth_upper': tf.io.VarLenFeature(tf.string),
-            'mouth_lower': tf.io.VarLenFeature(tf.string)
+            'paf_x': tf.io.FixedLenFeature([240*240], tf.float32),
+            'paf_y': tf.io.FixedLenFeature([240*240], tf.float32)
         }
 
         self.config = config
@@ -125,7 +116,7 @@ class TFDataset():
 
             return tf.concat([jaw, eyebrows, nose, re, le, mouth_exterior], axis=0)
 
-
+        """
         def get_paf(lms, img):
 
 
@@ -302,6 +293,7 @@ class TFDataset():
             paf = tf.py_function(func=_get_paf_py, inp=[img,lms], Tout=tf.float32)
 
             return paf
+            """
 
         def parse_boundary_heatmap(record):
 
@@ -406,6 +398,8 @@ class TFDataset():
         img = tf.image.resize(img, (self.config.img_size, self.config.img_size))
 
         img = tf.image.per_image_standardization(img)
-        paf = get_paf(landmark, img)
+        paf_x = record['paf_x']
+        paf_y = record['paf_y']
+        paf = tf.stack([paf_x, paf_y], axis=-1)
 
         return img, (landmark, paf)

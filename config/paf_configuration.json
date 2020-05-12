@@ -1,10 +1,10 @@
 {
   "exp_name": "0423-paf",
 
-  "landmark_path": "/home/hobbs/data-archive/landmark-tfr/tight",
+  "landmark_path": "/home/liam/giant/data-archive/paf",
 
   "finetune_regressor": true,
-  "pretrained_exp": "0409-test",
+  "pretrained_exp": "0506-test",
 
   "train": true,
   "finetune": true,
@@ -24,6 +24,6 @@
   "training_steps": 10000,
   "validation_steps": 85,
 
-  "checkpoint_dir": "/home/hobbs/bench-liam/paf/checkpoints",
-  "tensorboard_log_dir": "/home/hobbs/bench-liam/paf/tensorboard"
+  "checkpoint_dir": "/home/liam/giant/bench-liam/paf/checkpoints",
+  "tensorboard_log_dir": "/home/liam/giant/bench-liam/paf/tensorboard"
 }
