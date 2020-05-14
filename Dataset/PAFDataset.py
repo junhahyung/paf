@@ -21,8 +21,8 @@ class TFDataset():
             'image': tf.io.VarLenFeature(tf.string),
             'landmarks': tf.io.FixedLenFeature([68*2], tf.float32),
             'headpose': tf.io.FixedLenFeature([3], tf.float32),
-            'paf_x': tf.io.FixedLenFeature([240*240], tf.float32),
-            'paf_y': tf.io.FixedLenFeature([240*240], tf.float32)
+            'paf_x': tf.io.VarLenFeature(tf.string),
+            'paf_y': tf.io.VarLenFeature(tf.string)
         }
 
         self.config = config
@@ -398,8 +398,15 @@ class TFDataset():
         img = tf.image.resize(img, (self.config.img_size, self.config.img_size))
 
         img = tf.image.per_image_standardization(img)
-        paf_x = record['paf_x']
-        paf_y = record['paf_y']
+        paf_x = record['paf_x'].values[0]
+        paf_y = record['paf_y'].values[0]
+        paf_x = tf.image.decode_jpeg(paf_x)
+        paf_x = tf.image.convert_image_dtype(paf_x, tf.float32)
+        paf_y = tf.image.decode_jpeg(paf_y)
+        paf_y = tf.image.convert_image_dtype(paf_y, tf.float32)
         paf = tf.stack([paf_x, paf_y], axis=-1)
+        paf = tf.linalg.normalize(paf, axis=-1)[0]
+        paf = tf.squeeze(paf)
+        paf = tf.where(tf.math.is_nan(paf), tf.zeros_like(paf), paf)
 
         return img, (landmark, paf)

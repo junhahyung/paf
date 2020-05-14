@@ -181,15 +181,19 @@ def preprocess(record):
     paf_x = record['paf_x'].values[0]
     paf_y = record['paf_y'].values[0]
     paf_x = tf.image.decode_jpeg(paf_x)
+    paf_x = tf.image.convert_image_dtype(paf_x, tf.float32)
     paf_y = tf.image.decode_jpeg(paf_y)
+    paf_y = tf.image.convert_image_dtype(paf_y, tf.float32)
     paf = tf.stack([paf_x, paf_y], axis=-1)
-    paf = tf.linalg.normalize(paf, axis=-1)
+    paf = tf.linalg.normalize(paf, axis=-1)[0]
+    paf = tf.squeeze(paf)
+    paf = tf.where(tf.math.is_nan(paf), tf.zeros_like(paf), paf)
 
     return img, (landmark, paf)
 
 
 
-tfrecord_path = "/home/liam/giant/data-archive/paf/train/"
+tfrecord_path = "/home/liam/mario/data-archive/paf/train/"
 no_order_option = tf.data.Options()
 no_order_option.experimental_deterministic = False
 tfrecord_data = tf.data.Dataset.list_files(os.path.join(tfrecord_path, '*.tfrecords'), shuffle=False) \
@@ -203,4 +207,6 @@ tfrecord_data = tf.data.Dataset.list_files(os.path.join(tfrecord_path, '*.tfreco
 d = iter(tfrecord_data)
 x,y = next(d)
 #print(y[-1][0]==127)
-print(y[-1][0])
+paf = y[1][2]
+for i in range(240):
+    print(paf[i])

@@ -1,7 +1,7 @@
 {
-  "exp_name": "0423-paf",
+  "exp_name": "0514-paf",
 
-  "landmark_path": "/home/liam/giant/data-archive/paf",
+  "landmark_path": "/home/liam/mario/data-archive/paf",
 
   "finetune_regressor": true,
   "pretrained_exp": "0506-test",
@@ -16,14 +16,11 @@
   "dot_size": 5,
 
   "learning_rate": 0.00001,
-  "num_epochs": 200,
+  "num_epochs": 500,
   "batch_size": 32,
   "dropout_rate": 0.5,
   "max_num_threads": 24,
 
-  "training_steps": 10000,
-  "validation_steps": 85,
-
-  "checkpoint_dir": "/home/liam/giant/bench-liam/paf/checkpoints",
-  "tensorboard_log_dir": "/home/liam/giant/bench-liam/paf/tensorboard"
+  "training_steps": 1000,
+  "validation_steps": 85
 }

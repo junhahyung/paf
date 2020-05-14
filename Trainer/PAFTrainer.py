@@ -1,5 +1,9 @@
 import os
+import io
+import sys
+import numpy as np
 import tensorflow as tf
+from matplotlib import pyplot as plt
 from tqdm import trange
 from utils.losses import *
 
@@ -87,6 +91,32 @@ class Trainer():
               f"--- val-loss: {val_loss:.06f}" )
 
         # tf.summary
+        def plot_to_image(figure):
+            """Converts the matplotlib plot specified by 'figure' to a PNG image and
+            returns it. The supplied figure is closed and inaccessible after this call."""
+            # Save the plot to a PNG in memory.
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            # Closing the figure prevents it from being displayed directly inside
+            # the notebook.
+            plt.close(figure)
+            buf.seek(0)
+            # Convert PNG buffer to TF image
+            image = tf.image.decode_png(buf.getvalue(), channels=4)
+            # Add the batch dimension
+            image = tf.expand_dims(image, 0)
+            return image
+
+        def plot_quiver(img, paf):
+            figure = plt.figure(figsize=(10,10))
+            paf = tf.transpose(paf, (2,0,1))
+            xi = np.arange(240)
+            yi = np.arange(240)
+            plt.imshow(img)
+            plt.quiver(xi, yi, np.transpose(paf[0]), -np.transpose(paf[1]), scale_units='xy', scale=0.1)
+
+            return figure
+
         with self.tb_writer.as_default():
             # scalar
             tf.summary.scalar('MSE', training_loss, step=epoch)
@@ -100,11 +130,15 @@ class Trainer():
             input_img = x[i]
             paf = paf[i]
             
-            input_img = tf.reshape(tf.reduce_sum(input_img, -1), (1, 96, 96, 1))
-            paf = tf.reshape(paf, (1, 96, 96, 2))
+            figure = plot_quiver(input_img, paf)
+            input_img = tf.reshape(input_img, (1, 240, 240, 3))
+            '''
+            paf = tf.reshape(paf, (1, 240, 240, 2))
 
-            tf_img = tf.concat([input_img, paf], axis=0)
-            tf.summary.image('Train', tf_img, step=epoch)
+            tf_img = tf.concat([input_img, paf], axis=-1)
+            '''
+            tf.summary.image('paf', plot_to_image(figure), step=epoch)
+            tf.summary.image('Train', input_img, step=epoch)
 
             x = self.imgs_from_val
             paf = self.paf_gen(self.imgs_from_val)
@@ -112,11 +146,15 @@ class Trainer():
             input_img = x[i]
             paf = paf[i]
 
-            input_img = tf.reshape(tf.reduce_sum(input_img, -1), (1, 96, 96, 1))
-            paf = tf.reshape(paf, (1, 96, 96, 2))
+            figure = plot_quiver(input_img, paf)
+            input_img = tf.reshape(input_img, (1, 240, 240, 3))
+            '''
+            paf = tf.reshape(paf, (1, 240,240, 2))
 
-            tf_img = tf.concat([input_img, paf], axis=0)
-            tf.summary.image('Validation', tf_img, step=epoch)
+            tf_img = tf.concat([input_img, paf], axis=-1)
+            '''
+            tf.summary.image('paf val', plot_to_image(figure), step=epoch)
+            tf.summary.image('Validation', input_img, step=epoch)
 
         return val_loss
 
@@ -128,7 +166,7 @@ class Trainer():
 
             if val_loss < min_loss:
                 print(f'Generator Loss has improved from {min_loss:.4f} to {val_loss:.4f} - saving model to {self.config.checkpoint_dir}')
-                min_loss = val_gloss
+                min_loss = val_loss
                 model_name = f'{i:03d}-generator.hdf5'
                 model_path = os.path.join(self.config.checkpoint_dir, model_name)
                 self.paf_gen.save(model_path)
