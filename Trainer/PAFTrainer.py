@@ -69,6 +69,29 @@ class Trainer():
 
             # train generator
             loss, grads, paf = self.train_step(self.paf_gen, x, y[1], self.paf_gen_loss)
+            lnan = tf.math.is_nan(loss)
+            lnan = tf.math.reduce_any(lnan)
+            if lnan:
+                print("loss is nan")
+                xnan = tf.math.is_nan(x)
+                xnan = tf.math.reduce_any(xnan)
+                ynan = tf.math.is_nan(y[1])
+                ynan = tf.math.reduce_any(ynan)
+                pnan = tf.math.is_nan(paf)
+                pnan = tf.math.reduce_any(pnan)
+                if xnan:
+                    print("x has nan")
+                else:
+                    print("x is NOT nan")
+                if ynan:
+                    print("y has nan")
+                else:
+                    print("y is NOT nan")
+                if pnan:
+                    print("p has nan")
+                else:
+                    print("p is NOT nan")
+
             self.paf_opt.apply_gradients(zip(grads, self.paf_gen.trainable_variables))
 
             losses.append(loss)
@@ -86,6 +109,8 @@ class Trainer():
 
             val_losses.append(loss)
         val_loss = sum(val_losses) / len(val_losses)
+
+        print(losses)
 
         print(f"Epoch {epoch:03d}: train-loss: {training_loss:.06f} "
               f"--- val-loss: {val_loss:.06f}" )

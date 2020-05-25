@@ -401,9 +401,9 @@ class TFDataset():
         paf_x = record['paf_x'].values[0]
         paf_y = record['paf_y'].values[0]
         paf_x = tf.image.decode_jpeg(paf_x)
-        paf_x = tf.image.convert_image_dtype(paf_x, tf.float32)
+        paf_x = tf.cast(paf_x, tf.float32)
         paf_y = tf.image.decode_jpeg(paf_y)
-        paf_y = tf.image.convert_image_dtype(paf_y, tf.float32)
+        paf_y = tf.cast(paf_y, tf.float32)
         paf = tf.stack([paf_x, paf_y], axis=-1)
         paf = tf.linalg.normalize(paf, axis=-1)[0]
         paf = tf.squeeze(paf)

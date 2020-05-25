@@ -1,5 +1,5 @@
 {
-  "exp_name": "0514-paf",
+  "exp_name": "0520-paf",
 
   "landmark_path": "/home/liam/mario/data-archive/paf",
 
@@ -21,6 +21,6 @@
   "dropout_rate": 0.5,
   "max_num_threads": 24,
 
-  "training_steps": 1000,
+  "training_steps": 10000,
   "validation_steps": 85
 }
